@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>効果音ボード</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: #0f0f1a;
+      font-family: 'Segoe UI', sans-serif;
+      gap: 40px;
+    }
+
+    h1 {
+      color: #e0e0ff;
+      font-size: 2rem;
+      letter-spacing: 0.1em;
+      text-shadow: 0 0 20px rgba(120,120,255,0.6);
+    }
+
+    .buttons {
+      display: flex;
+      gap: 30px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .sfx-btn {
+      width: 160px;
+      height: 160px;
+      border-radius: 20px;
+      border: none;
+      cursor: pointer;
+      font-size: 2.8rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      transition: transform 0.1s, box-shadow 0.1s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .sfx-btn span.label {
+      font-size: 0.85rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+    }
+
+    .sfx-btn:active {
+      transform: scale(0.93);
+    }
+
+    .sfx-btn.playing {
+      animation: pulse 0.15s ease-out;
+    }
+
+    @keyframes pulse {
+      0%   { transform: scale(1); }
+      50%  { transform: scale(1.08); }
+      100% { transform: scale(1); }
+    }
+
+    /* Explosion */
+    #btn-explosion {
+      background: linear-gradient(135deg, #ff4500, #ff8c00, #ffd700);
+      color: #fff;
+      box-shadow: 0 0 30px rgba(255, 100, 0, 0.6);
+    }
+    #btn-explosion:hover { box-shadow: 0 0 50px rgba(255, 100, 0, 0.9); }
+
+    /* Whoosh */
+    #btn-whoosh {
+      background: linear-gradient(135deg, #00bfff, #1e90ff, #7b68ee);
+      color: #fff;
+      box-shadow: 0 0 30px rgba(0, 150, 255, 0.6);
+    }
+    #btn-whoosh:hover { box-shadow: 0 0 50px rgba(0, 150, 255, 0.9); }
+
+    /* Fanfare */
+    #btn-fanfare {
+      background: linear-gradient(135deg, #ffd700, #ffec6e, #fff176);
+      color: #5a3e00;
+      box-shadow: 0 0 30px rgba(255, 215, 0, 0.6);
+    }
+    #btn-fanfare:hover { box-shadow: 0 0 50px rgba(255, 215, 0, 0.9); }
+
+    .hint {
+      color: #666;
+      font-size: 0.8rem;
+    }
+  </style>
+</head>
+<body>
+  <h1>🔊 効果音ボード</h1>
+
+  <div class="buttons">
+    <button class="sfx-btn" id="btn-explosion" onclick="playExplosion(this)">
+      💥
+      <span class="label">爆発</span>
+    </button>
+
+    <button class="sfx-btn" id="btn-whoosh" onclick="playWhoosh(this)">
+      💨
+      <span class="label">かすめる</span>
+    </button>
+
+    <button class="sfx-btn" id="btn-fanfare" onclick="playFanfare(this)">
+      🎺
+      <span class="label">ファンファーレ</span>
+    </button>
+  </div>
+
+  <p class="hint">ボタンをクリックして効果音を再生</p>
+
+  <script>
+    let ctx = null;
+
+    function getCtx() {
+      if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
+      if (ctx.state === 'suspended') ctx.resume();
+      return ctx;
+    }
+
+    function animateBtn(btn) {
+      btn.classList.remove('playing');
+      void btn.offsetWidth;
+      btn.classList.add('playing');
+      setTimeout(() => btn.classList.remove('playing'), 200);
+    }
+
+    // ── 1. 爆発音 ──────────────────────────────────────────
+    function playExplosion(btn) {
+      animateBtn(btn);
+      const ac = getCtx();
+      const now = ac.currentTime;
+
+      // ノイズバッファ
+      const bufLen = ac.sampleRate * 1.2;
+      const buf = ac.createBuffer(1, bufLen, ac.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < bufLen; i++) data[i] = Math.random() * 2 - 1;
+
+      const noise = ac.createBufferSource();
+      noise.buffer = buf;
+
+      // 低域フィルタで重低音に
+      const lp = ac.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.setValueAtTime(600, now);
+      lp.frequency.exponentialRampToValueAtTime(60, now + 1.0);
+
+      const gainNode = ac.createGain();
+      gainNode.gain.setValueAtTime(2.5, now);
+      gainNode.gain.exponentialRampToValueAtTime(0.001, now + 1.2);
+
+      // 低音パンチ用サイン波
+      const osc = ac.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(120, now);
+      osc.frequency.exponentialRampToValueAtTime(30, now + 0.5);
+      const oscGain = ac.createGain();
+      oscGain.gain.setValueAtTime(3, now);
+      oscGain.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
+
+      noise.connect(lp).connect(gainNode).connect(ac.destination);
+      osc.connect(oscGain).connect(ac.destination);
+
+      noise.start(now);
+      noise.stop(now + 1.2);
+      osc.start(now);
+      osc.stop(now + 0.6);
+    }
+
+    // ── 2. かすめる音 ────────────────────────────────────────
+    function playWhoosh(btn) {
+      animateBtn(btn);
+      const ac = getCtx();
+      const now = ac.currentTime;
+      const dur = 0.7;
+
+      const bufLen = ac.sampleRate * dur;
+      const buf = ac.createBuffer(1, bufLen, ac.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < bufLen; i++) data[i] = Math.random() * 2 - 1;
+
+      const noise = ac.createBufferSource();
+      noise.buffer = buf;
+
+      // バンドパスで「シュッ」感
+      const bp = ac.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.frequency.setValueAtTime(300, now);
+      bp.frequency.exponentialRampToValueAtTime(4000, now + dur * 0.5);
+      bp.frequency.exponentialRampToValueAtTime(800, now + dur);
+      bp.Q.value = 1.5;
+
+      // ステレオパン：左→右へ飛び去る
+      const panner = ac.createStereoPanner();
+      panner.pan.setValueAtTime(-1, now);
+      panner.pan.linearRampToValueAtTime(1, now + dur);
+
+      const gainNode = ac.createGain();
+      gainNode.gain.setValueAtTime(0.0, now);
+      gainNode.gain.linearRampToValueAtTime(1.8, now + dur * 0.3);
+      gainNode.gain.exponentialRampToValueAtTime(0.001, now + dur);
+
+      noise.connect(bp).connect(gainNode).connect(panner).connect(ac.destination);
+      noise.start(now);
+      noise.stop(now + dur);
+    }
+
+    // ── 3. ファンファーレ ────────────────────────────────────
+    function playFanfare(btn) {
+      animateBtn(btn);
+      const ac = getCtx();
+      const now = ac.currentTime;
+
+      // ト長調の短いファンファーレ音列
+      // C4=262, E4=330, G4=392, C5=523, E5=659
+      const notes = [
+        { freq: 262, start: 0.00, dur: 0.12 },
+        { freq: 330, start: 0.10, dur: 0.12 },
+        { freq: 392, start: 0.20, dur: 0.12 },
+        { freq: 262, start: 0.32, dur: 0.08 },
+        { freq: 392, start: 0.40, dur: 0.08 },
+        { freq: 523, start: 0.48, dur: 0.08 },
+        { freq: 659, start: 0.56, dur: 0.50 },
+      ];
+
+      notes.forEach(({ freq, start, dur }) => {
+        // メイン：トランペット風（鋸波）
+        const osc = ac.createOscillator();
+        osc.type = 'sawtooth';
+        osc.frequency.value = freq;
+
+        // ハーモニー（オクターブ上、小音量）
+        const osc2 = ac.createOscillator();
+        osc2.type = 'square';
+        osc2.frequency.value = freq * 2;
+
+        const hp = ac.createBiquadFilter();
+        hp.type = 'highpass';
+        hp.frequency.value = 300;
+
+        const g = ac.createGain();
+        const t0 = now + start;
+        g.gain.setValueAtTime(0, t0);
+        g.gain.linearRampToValueAtTime(0.5, t0 + 0.02);
+        g.gain.setValueAtTime(0.5, t0 + dur - 0.03);
+        g.gain.linearRampToValueAtTime(0, t0 + dur);
+
+        const g2 = ac.createGain();
+        g2.gain.value = 0.15;
+
+        osc.connect(hp).connect(g).connect(ac.destination);
+        osc2.connect(g2).connect(g);
+
+        osc.start(t0);
+        osc.stop(t0 + dur);
+        osc2.start(t0);
+        osc2.stop(t0 + dur);
+      });
+
+      // ドラムロール風アクセント
+      const bufLen = ac.sampleRate * 0.06;
+      const buf = ac.createBuffer(1, bufLen, ac.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < bufLen; i++) data[i] = Math.random() * 2 - 1;
+      const snare = ac.createBufferSource();
+      snare.buffer = buf;
+      const sg = ac.createGain();
+      sg.gain.setValueAtTime(0.4, now + 0.56);
+      sg.gain.exponentialRampToValueAtTime(0.001, now + 0.62);
+      const shp = ac.createBiquadFilter();
+      shp.type = 'highpass';
+      shp.frequency.value = 2000;
+      snare.connect(shp).connect(sg).connect(ac.destination);
+      snare.start(now + 0.56);
+      snare.stop(now + 0.62);
+    }
+  </script>
+</body>
+</html>
